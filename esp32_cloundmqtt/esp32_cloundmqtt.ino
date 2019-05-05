@@ -1,31 +1,40 @@
 #include <WiFi.h>
 #include <PubSubClient.h>
+#include <ArduinoJson.h>
 
-const char* ssid = "xxxx";
-const char* password =  "xxxx";
+const char* ssid = "xxxxx";
+const char* password =  "xxxxx";
 
-const char* mqttServer = "xxxx";
+const char* mqttServer = "xxxxx";
 const int mqttPort = 00000;
-const char* mqttUser = "xxxx";
-const char* mqttPassword = "xxxx";
+const char* mqttUser = "xxxxx";
+const char* mqttPassword = "xxxxx";
+const char* mqttName = "superman";
 
 #define LED_PIN 2
 
 WiFiClient espClient;
 PubSubClient client(espClient);
 
+
 void callback(char* topic, byte* payload, unsigned int length) {
   payload[length] = '\0';
   String topic_str = topic, payload_str = (char*)payload;
   Serial.println("[" + topic_str + "]: " + payload_str);
 
-  digitalWrite(LED_PIN, (payload_str == "ON") ? HIGH : LOW);
+  if (payload_str == "ON") {
+    digitalWrite(LED_PIN, LOW);
+  } else {
+    digitalWrite(LED_PIN, HIGH);
+  }
 }
 
 void setup() {
-
   Serial.begin(115200);
+  pinMode(LED_PIN, OUTPUT);
+
   WiFi.begin(ssid, password);
+
 
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
@@ -40,25 +49,27 @@ void setup() {
     Serial.println("Connecting to MQTT...");
 
     if (client.connect("ESP32Client", mqttUser, mqttPassword )) {
-
       Serial.println("connected");
-
     } else {
-
       Serial.print("failed with state ");
       Serial.println(client.state());
-      delay(2000);
-
+      delay(1000);
     }
   }
 
-  client.subscribe("/CMMC/esp32Device");
+  client.subscribe("CMMC/esp32Device");
+  client.setCallback(callback);
 }
 
 uint32_t pevTime = 0;
 uint32_t count;
+
 char bufferData[100];
 String dataSend;
+String output;
+
+StaticJsonBuffer<200> jsonBuffer;
+JsonObject& deviceData = jsonBuffer.createObject();
 
 void loop() {
   client.loop();
@@ -68,13 +79,14 @@ void loop() {
     pevTime = curTime;
 
     count += 1;
-    sprintf(bufferData, "count: %lu", count);
-    dataSend = bufferData;
-    
-    Serial.print("data: ");
-    Serial.println(dataSend);
-    
-    client.publish("esp32/temperature", dataSend.c_str());
 
+    deviceData["name"] = mqttName;
+    deviceData["count"] = count;
+    deviceData.printTo(output);
+
+    Serial.print("data: ");
+    Serial.println(output);
+
+    client.publish("CMMC/data", output.c_str());
   }
 }
